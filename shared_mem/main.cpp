@@ -2,42 +2,55 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include<mutex>
 
-static const std::string shared_mem_name{"/shared_mem"};
+static const std::string shared_mem_name{"/sh_mem1"};
 
 // Function to be executed in a separate thread
 void backgroundTask()
 {
     std::cout << "Background task started...\n";
-    ProcCommunicator *slave = new ProcCommunicator(false,shared_mem_name);
+    ProcCommunicator *slave = new ProcCommunicator(false, true, shared_mem_name);
+    Message *res = nullptr;
 
-    auto res = slave->receive();
-    std::vector<int> vec1{1, 2, 3, 4, 5, 6};
-    Message msg{res->id + 1, MessageType::HANDSHAKE_OK};
-    slave->send(&msg);
+    int counter = 0;
 
-    auto res2 = slave->receive(); // depending on type payload can be extracted
-    if (res2->type == MessageType::SET_CONFIG)
+    while (counter < 200)
     {
-        MessageSetConfig *setc = static_cast<MessageSetConfig *>(res2);
-        printf("%d\n", setc->conf);
-    }
-    Message msg2{res2->id + 1, MessageType::SET_CONFIG_OK};
-    slave->send(&msg2);
-
-    auto res3 = slave->receive(); // depending on type payload can be extracted
-    if (res3->type == MessageType::COMPARE_REQUEST)
-    {
-        MessageCompareRequest *setc = static_cast<MessageCompareRequest *>(res2);
-        printf("%d\n", setc->f1);
+        {
+            Message msg{777, MessageType::HANDSHAKE_OK};
+            Message* res = slave->receive();
+            //std::cout << res.id << std::endl;
+            msg.id = res->id;
+            //std::cout << msg.id << std::endl;
+            slave->send(&msg);
+            //std::cout << res.id << " -> " << msg.id << "." << std::endl;
+            counter++;
+        }
     }
 
-    MessageCompareResult msg3{res3->id + 1, MessageType::COMPARE_RESULT, 789};
-    slave->send(&msg3);
-
-    //std::this_thread::sleep_for(std::chrono::seconds(10));
     delete slave;
     std::cout << "Background task completed.\n";
+}
+
+void backgroundTaskMasterMaster()
+{
+    std::cout << "Background Master task started...\n";
+    ProcCommunicator master(true, true, shared_mem_name);
+    Message msg_hand{1, MessageType::HANDSHAKE};
+
+    int counter = 0;
+
+    while (counter < 100)
+    {
+
+        master.send(&msg_hand);
+        auto msg_resp = master.receive();
+        std::cout << "m 1 =" << msg_resp->id << std::endl;
+        counter++;
+    }
+
+    std::cout << "Background Master task completed.\n";
 }
 
 int main()
@@ -45,33 +58,28 @@ int main()
     std::cout << "Main thread starts...\n";
     std::vector<int> vec1{1, 2, 3, 4, 5};
 
-    Message msg_hand{1, MessageType::HANDSHAKE};
-    ProcCommunicator master(true, shared_mem_name);
-    // Create a thread and execute the backgroundTask function
+    Message msg_hand{2, MessageType::HANDSHAKE};
+    ProcCommunicator master(true, true, shared_mem_name);
+
     std::thread worker(backgroundTask);
+    std::thread worker_master(backgroundTaskMasterMaster);
 
     // std::this_thread::sleep_for(std::chrono::seconds(5));
-    master.send(&msg_hand);
-    auto msg_resp = master.receive();
+    int counter = 0;
 
-    // std::this_thread::sleep_for(std::chrono::seconds(5));
-    MessageSetConfig msg_set_conf{3, MessageType::SET_CONFIG, 17};
-    master.send(&msg_set_conf);
-    msg_resp = master.receive();
-
-    MessageCompareRequest msg2{5, MessageType::COMPARE_REQUEST, 123, 456};
-    master.send(&msg2);
-    msg_resp = master.receive();
-
-    if (msg_resp->type == MessageType::COMPARE_RESULT)
+    while (counter < 100)
     {
-        MessageCompareResult *setc = static_cast<MessageCompareResult *>(msg_resp);
-        std::cout << "COMPARE_RESULT received.\n";
+        master.send(&msg_hand);
+        auto msg_resp = master.receive();
+        //std::cout << "m 2 " << msg_resp->id << std::endl;
+        counter++;
     }
 
-    worker.join();
+    if (worker.joinable())
+        worker.join();
 
-    
+    if (worker_master.joinable())
+        worker_master.join();
 
     return 0;
 }

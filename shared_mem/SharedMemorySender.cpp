@@ -74,6 +74,7 @@ void SharedMemorySender::finish()
 
 void SharedMemorySender::sendMessage(const Message *msg)
 {
+    //    std::cout<<"sendMessage\n";
     if (msg->type == MessageType::SET_CONFIG)
         std::memcpy(m_ptr, msg, sizeof(MessageSetConfig));
     else if (msg->type == MessageType::COMPARE_REQUEST)

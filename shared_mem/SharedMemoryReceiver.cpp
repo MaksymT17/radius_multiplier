@@ -69,6 +69,7 @@ void SharedMemoryReceiver::finish()
 
 Message *SharedMemoryReceiver::receiveMessage()
 {
+    //std::cout<<"receiveMessage\n";
     Message *message(static_cast<Message *>(m_ptr));
     return message;
 }
